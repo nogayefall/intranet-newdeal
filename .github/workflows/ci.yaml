@@ -11,9 +11,6 @@ env:
   DOCKER_REGISTRY: ${{ secrets.DOCKERHUB_USERNAME }}
 
 jobs:
-  # ===============================
-  # JOB 1 - BUILD IMAGE DOCKER
-  # ===============================
   build:
     runs-on: ubuntu-latest
     steps:
@@ -33,19 +30,16 @@ jobs:
         run: |
           docker image ls | grep ${{ env.IMAGE_NAME }}
 
-      - name: Sauvegarde de l'image pour les jobs suivants
+      - name: Sauvegarde de l'image
         run: |
           docker save ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} -o image.tar
 
-      - name: Upload de l'image comme artifact
+      - name: Upload de l'image
         uses: actions/upload-artifact@v4
         with:
           name: docker-image
           path: image.tar
 
-  # ===============================
-  # JOB 2 - SCAN SECURITE
-  # ===============================
   scan:
     runs-on: ubuntu-latest
     needs: build
@@ -62,15 +56,15 @@ jobs:
         run: |
           docker load -i image.tar
 
-      - name: Scan des vulnérabilités avec Trivy
+      - name: Scan vulnerabilites Trivy
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           format: table
-          exit-code: 0
-          severity: LOW,MEDIUM,HIGH,CRITICAL
+          exit-code: 1
+          severity: CRITICAL
 
-      - name: Scan des secrets avec Trivy
+      - name: Scan secrets Trivy
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
@@ -78,9 +72,6 @@ jobs:
           scanners: secret
           format: table
 
-  # ===============================
-  # JOB 3 - PUSH VERS DOCKER HUB
-  # ===============================
   push:
     runs-on: ubuntu-latest
     needs: scan
@@ -99,6 +90,37 @@ jobs:
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
           docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-      - name: Push de l'image vers Docker Hub
+      - name: Push vers Docker Hub
         run: |
           docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
+  notification:
+    runs-on: ubuntu-latest
+    needs: [build, scan, push]
+    if: always()
+    steps:
+      - name: Notification succes
+        if: ${{ needs.build.result == 'success' && needs.scan.result == 'success' && needs.push.result == 'success' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "CI Pipeline SUCCES - Intranet NewDeal"
+          body: "Le pipeline CI sur la branche dev a ete execute avec succes."
+          to: moussawade@groupeisi.com
+          from: ${{ secrets.MAIL_USERNAME }}
+
+      - name: Notification echec
+        if: ${{ needs.build.result == 'failure' || needs.scan.result == 'failure' || needs.push.result == 'failure' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "CI Pipeline ECHEC - Intranet NewDeal"
+          body: "Le pipeline CI sur la branche dev a echoue. Verifiez les logs."
+          to: moussawade@groupeisi.com
+          from: ${{ secrets.MAIL_USERNAME }}

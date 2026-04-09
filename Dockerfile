@@ -1,4 +1,4 @@
-# Image de base nginx:alpine3.23
+# Image de base nginx:alpine3.23-slim
 FROM nginx:alpine3.23
 
 # Copie des fichiers du site statique
