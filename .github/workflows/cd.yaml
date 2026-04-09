@@ -39,29 +39,21 @@ jobs:
     needs: scan
     steps:
       - name: Login to Docker Hub
-        run: |
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | `
-          docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+        run: docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" -p "${{ secrets.DOCKERHUB_TOKEN }}"
 
       - name: Pull de l'image depuis Docker Hub
-        run: |
-          docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        run: docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
       - name: Arreter le conteneur existant
-        run: |
-          docker stop intranet-prod 2>$null; exit 0
+        run: docker stop intranet-prod
+        continue-on-error: true
 
       - name: Supprimer l'ancien conteneur
-        run: |
-          docker rm intranet-prod 2>$null; exit 0
+        run: docker rm intranet-prod
+        continue-on-error: true
 
       - name: Deployer le nouveau conteneur
-        run: |
-          docker run -d `
-            -p 80:80 `
-            --name intranet-prod `
-            ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        run: docker run -d -p 80:80 --name intranet-prod ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
       - name: Verifier le deploiement
-        run: |
-          docker ps | findstr intranet-prod
+        run: docker ps | findstr intranet-prod
